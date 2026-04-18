@@ -38,12 +38,12 @@ Some DNS servers are slow. This tool:
 ```bash
 git clone https://github.com/YourUsername/DNS-Optimizer.git
 ### Step 2: Go to folder
-```bash
+
 cd DNS-Optimizer
 ### Step 3: Run the script
-```bash
+
 python network_monitor.py
-```bash
+```
 
 ## 📊 Sample Output
 
