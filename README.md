@@ -36,7 +36,7 @@ Some DNS servers are slow. This tool:
 
 ### Step 1: Download the code
 ```bash
-git clone https://github.com/YourUsername/DNS-Optimizer.git
+git clone https://github.com/gaikwad-kunal/DNS-Optimizer.git
 ### Step 2: Go to folder
 
 cd DNS-Optimizer
