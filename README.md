@@ -51,6 +51,7 @@ Below is how the output looks:
 
 ### 🏆 Final Result
 After running, you will see something like:
+![image](https://github.com/gaikwad-kunal/NetHealth-Monitor/blob/main/output.png)
 
 > **🏆 Fastest DNS: Quad9 (9.9.9.9) → 2.17 ms**
 
