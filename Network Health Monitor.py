@@ -2,9 +2,9 @@ import socket
 import time
 import csv
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- Configuration ---
-# List of DNS servers to benchmark
 DNS_SERVERS = [
     {"name": "AdGuard", "ip": "94.140.14.14"},
     {"name": "AliDNS", "ip": "223.5.5.5"},
@@ -35,55 +35,100 @@ DNS_SERVERS = [
     {"name": "FlashStart", "ip": "185.236.104.104"},
     {"name": "Comcast Xfinity", "ip": "75.75.75.75"}
 ]
-TEST_PORT = 53  # DNS port
-TIMEOUT = 1.5   # Reduced timeout for faster bulk checking
 
-def check_connection(host, port=TEST_PORT, timeout=TIMEOUT):
-    """
-    Attempts to establish a TCP connection to the target server.
-    Returns a tuple: (is_connected (bool), latency_in_ms (float or None))
-    """
+TEST_PORT = 53
+TIMEOUT = 1.5
+MAX_WORKERS = 20
+
+
+# --- Core Function ---
+def check_connection(server):
+    ip = server["ip"]
+    name = server["name"]
+
     try:
-        # Create a socket (IPv4, TCP)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        
-        # Measure the time it takes to connect
-        start_time = time.time()
-        sock.connect((host, port))
-        end_time = time.time()
-        
-        sock.close()
-        
-        latency = round((end_time - start_time) * 1000, 2) # Convert to milliseconds
-        return True, latency
-    except (socket.timeout, socket.error):
-        # Connection failed (Network down or high packet loss)
-        return False, None
+        start = time.perf_counter()
 
-def main():
-    print("Starting One-Time DNS Server Benchmark...\n")
-    print(f"{'DNS Provider':<35} | {'IP Address':<15} | {'Status':<6} | {'Latency (ms)':<12}")
-    print("-" * 75)
-    
+        with socket.create_connection((ip, TEST_PORT), timeout=TIMEOUT):
+            latency = (time.perf_counter() - start) * 1000
+
+        return {
+            "name": name,
+            "ip": ip,
+            "status": "UP",
+            "latency": round(latency, 2)
+        }
+
+    except Exception:
+        return {
+            "name": name,
+            "ip": ip,
+            "status": "DOWN",
+            "latency": None
+        }
+
+
+# --- Benchmark Runner ---
+def run_benchmark():
     results = []
 
-    for server in DNS_SERVERS:
-        is_connected, latency = check_connection(host=server['ip'])
-        status = "UP" if is_connected else "DOWN"
-        latency_str = f"{latency} ms" if latency is not None else "N/A"
-        
-        print(f"{server['name']:<35} | {server['ip']:<15} | {status:<6} | {latency_str:<12}")
-        
-        if is_connected:
-            results.append((server['name'], server['ip'], latency))
-    
-    if results:
-        results.sort(key=lambda x: x[2])  # Sort by latency
-        fastest = results[0]
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(check_connection, server) for server in DNS_SERVERS]
+
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    return results
+
+
+# --- Display Results ---
+def display_results(results):
+    print("\nStarting DNS Benchmark...\n")
+    print(f"{'DNS Provider':<35} | {'IP Address':<15} | {'Status':<6} | {'Latency (ms)':<12}")
+    print("-" * 75)
+
+    for r in results:
+        latency = f"{r['latency']} ms" if r['latency'] else "N/A"
+        print(f"{r['name']:<35} | {r['ip']:<15} | {r['status']:<6} | {latency:<12}")
+
+    valid = [r for r in results if r["status"] == "UP"]
+
+    if valid:
+        valid.sort(key=lambda x: x["latency"])
+        fastest = valid[0]
+
         print("\n" + "=" * 75)
-        print(f"🏆 Fastest DNS Server: {fastest[0]} ({fastest[1]}) with {fastest[2]} ms")
+        print(f"🏆 Fastest DNS: {fastest['name']} ({fastest['ip']}) → {fastest['latency']} ms")
         print("=" * 75)
+
+
+# --- Export CSV ---
+def export_csv(results):
+    filename = f"dns_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    with open(filename, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Provider", "IP", "Status", "Latency(ms)"])
+
+        for r in results:
+            writer.writerow([r["name"], r["ip"], r["status"], r["latency"]])
+
+    print(f"\n📁 Results saved to {filename}")
+
+
+# --- Main ---
+def main():
+    start_time = time.time()
+
+    results = run_benchmark()
+    results.sort(key=lambda x: x["latency"] if x["latency"] else 999)
+
+    display_results(results)
+
+    export_csv(results)
+
+    print(f"\n⏱️ Completed in {round(time.time() - start_time, 2)} seconds")
+
 
 if __name__ == "__main__":
     main()
